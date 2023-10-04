@@ -1,4 +1,4 @@
-/*
+/* tips
 p = get a number from left neighbor
 print p
 loop:
@@ -20,8 +20,6 @@ loop:
 void foo();
 
 int main() {
-    printf("hello world\n");
-
     int fd[2];
     if(pipe(fd) < 0) {
         printf("pipe error\n");
@@ -67,8 +65,6 @@ void foo(int *fd_parent) {
         printf("pipe error\n");
         exit(-1);
     }
-    // close the read end;
-    close(fds[0]); 
         
     // loop:
     //     n = get a number from left neighbor
@@ -77,16 +73,21 @@ void foo(int *fd_parent) {
 
     int n = 0;
     while (read(fd_parent[0], &n, sizeof(int)) > 0) {
-        if (n / p != 0) {
+        if (n % p != 0) {
             write(fds[1], &n, sizeof(int));
         }
     }
-    close(fds[1]);
     
     int pid = fork();
     if (pid == 0) {
+        // close read end and write end;
+        close(fds[0]);
+        close(fds[1]);
         wait(0);
     } else if (pid > 0) {
         foo(fds);
+        // close readend, the wrie end was close in foo().
+        close(fds[0]);
+        exit(0);
     }
 }
