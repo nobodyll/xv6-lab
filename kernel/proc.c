@@ -684,3 +684,19 @@ procdump(void)
     printf("\n");
   }
 }
+
+// return the number of process.
+uint64 nused_proc(void) {
+  uint64 count = 0;
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    if (p != myproc()) {
+      acquire(&p->lock);
+      if (p->state != UNUSED) {
+        count++;
+      }
+      release(&p->lock);
+    }
+  }
+  return count;
+}
