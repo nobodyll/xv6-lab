@@ -91,3 +91,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// trace
+uint64 sys_trace() 
+{
+  // implements the new system call by remembering its 
+  // argument in a new variable in the proc structure
+  // (see kernel/proc.h)
+  int mask;
+  argint(0, &mask);
+  myproc()->tmask = mask;
+  return 0;
+}
