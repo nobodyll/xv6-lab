@@ -27,7 +27,7 @@ int main() {
     }
 
     int pid = fork();
-    if (pid == 0) {
+    if (pid > 0) {
     // parent process
         // close pipe's read end;        
         close(fd[0]);
@@ -40,7 +40,7 @@ int main() {
         close(fd[1]);
 
         wait(0);
-    } else if(pid > 0) {
+    } else if(pid == 0) {
         foo(fd);
     }
     exit(0);
@@ -79,12 +79,12 @@ void foo(int *fd_parent) {
     }
     
     int pid = fork();
-    if (pid == 0) {
+    if (pid > 0) {
         // close read end and write end;
         close(fds[0]);
         close(fds[1]);
         wait(0);
-    } else if (pid > 0) {
+    } else if (pid == 0) {
         foo(fds);
         // close readend, the wrie end was close in foo().
         close(fds[0]);

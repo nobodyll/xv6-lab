@@ -26,9 +26,9 @@ int main(int argc, char **argv) {
 
   for (int i = 0; i < x; i++) {
     int pid = fork();
-    if (pid == 0) {
+    if (pid > 0) {
       wait(0);
-    } else if (pid > 0) {
+    } else if (pid == 0) {
       char *execArgs[argc + 1];
       for (int i = 0; i < argc - 2; i++) {
         execArgs[i + 1] = argv[i + 2]; // parame 1
