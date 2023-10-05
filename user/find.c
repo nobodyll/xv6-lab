@@ -1,7 +1,7 @@
-#include "kernel/fs.h"
-#include "kernel/stat.h"
 #include "kernel/types.h"
 #include "user/user.h"
+#include "kernel/fs.h"
+#include "kernel/stat.h"
 
 void find(char *path, char *name) {
   char buf[512], *p;
