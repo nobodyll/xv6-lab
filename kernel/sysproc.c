@@ -69,12 +69,49 @@ sys_sleep(void)
   return 0;
 }
 
+void printBinary64(uint64 num) {
+    int size = sizeof(num) * 8;  // 计算64位无符号整数的位数
+
+    for (int i = size - 1; i >= 0; i--) {
+        uint64 bit = (num >> i) & 1ULL;  // 从最高位到最低位逐个获取位的值
+        printf("%d", bit);
+    }
+    if (num & PTE_A) {
+      printf("PTE_A");
+    } 
+    printf("\n");
+}
 
 #ifdef LAB_PGTBL
 int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  // if (pgaccess(buf, 32, &abits) < 0)
+  // Get func arguments.
+  // does va is page boundary????
+  uint64 va; // Start virtal addrss of the first user page to check. 
+  argaddr(0, &va); 
+  int n; // Number of pages to check.
+  argint(1, &n);  
+  uint64 addrAbits; // bitmask 
+  argaddr(2, &addrAbits);
+
+  struct proc *p = myproc();
+  int bitmask = 0;
+  pte_t *pte = 0;
+
+  for (int i = 0; i < n; i++, va += PGSIZE) {
+    pte = walk(p->pagetable, va, 0);
+    // printBinary64(*pte);
+    if (*pte & PTE_A) {
+      bitmask |= (1 << i);
+      *pte &= ~(PTE_A);
+    }
+  }
+
+  copyout(p->pagetable, addrAbits, (char*)&bitmask, sizeof(int));
+
   return 0;
 }
 #endif
