@@ -133,3 +133,34 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void backtrace() {
+  /*
+    meme layout:
+      frame pointer
+      ret addr (frame pointer - 8)
+      saved frame pointer (frame pointer - 16)
+      frame pointer
+      ret addr (frame pointer - 8)
+      saved frame pointer (frame pointer - 16)
+  */
+
+  // printf each of return address on the stack.
+  // 1. read the frame pointer by call r_fp();
+  // r_fp() - 8 is the address.
+  // loop: get the upper caller's frame pointer (r_fp() - 16);
+  // print( (r_fp() - 16) - 8)
+
+  // 1. read the frame pointer by call r_fp();
+  uint64 fp = r_fp();
+  // printf("%d\n%p\n", fp, fp);
+
+  while (fp < PGROUNDUP(fp)) {
+    // detail info 
+    // printf("fp - 16 -> saved frame pointer:%p\n", *(uint64 *)(fp - 16));
+    // printf("fp - 8 -> ret address:%p\n", *(uint64 *)(fp - 8));
+
+    printf("%p\n", *(uint64 *)(fp - 8));
+    fp = *(uint64 *)(fp - 16);
+  }
+}
