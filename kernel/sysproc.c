@@ -94,3 +94,38 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// lab4: trap
+uint64 sys_sigalarm(void) {
+  struct proc *p = myproc();
+
+  // arg1: alarm interval
+  int interval = 0;
+  argint(0, &interval);
+  // printf("interval: %d\n", interval);
+
+  // arg2: alarm handler
+  void (*handler)();
+  argaddr(1, (uint64*)&handler);
+  // printf("handler: %d: %p\n", handler);
+
+  p->alarm_handler = (uint64)handler;
+  p->alarm_interval = interval;
+
+  return 0;
+}
+
+uint64 sys_sigreturn(void) {
+  struct proc *p = myproc();
+
+  if (p->first != 1)
+    panic("call sigreturn but not in sighandler.\n");
+
+  // resume the process status from alarmtrapframe.
+  memmove(p->trapframe, p->alarm_trapframe, sizeof(struct trapframe));
+  p->nticks = 0;
+
+  p->first = 0;
+  
+  return p->trapframe->a0;
+}
