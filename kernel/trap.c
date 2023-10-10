@@ -65,20 +65,12 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if (r_scause() == 13 || r_scause() == 15) {
-    if (iscowpage(p->pagetable, r_stval()) == 0) {
-      if (cowpagetrap(p->pagetable, r_stval()) != 0) {
-        // kill process
-        acquire(&p->lock);
-        p->killed = 1;
-        release(&p->lock);
-      }
-    } else {
-      // kill process
-      acquire(&p->lock);
+  } else if (r_scause() == 15) {
+    uint64 fault_va = r_stval(); // 获取出错的虚拟地址
+    if (fault_va >= p->sz || iscowpage(p->pagetable, fault_va) != 0 ||
+        cowpagetrap(p->pagetable, PGROUNDDOWN(fault_va)) != 0)
       p->killed = 1;
-      release(&p->lock);
-    }
+
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
@@ -233,35 +225,26 @@ devintr()
   }
 }
 
-// int iscowpage(pagetable_t pagetable, uint64 va) {
-//   if (va > MAXVA) {
-//     printf("(va > MAXVA)\n"); 
-//     return -1;
-//   }
-//   pte_t *pte = walk(pagetable, va, 0);
-//   if (pte == 0)
-//     return -1;
-//   if ((*pte & PTE_V) == 0) 
-//     return -1;
-//   // if ((*pte & PTE_W) != 0) 
-//   //   return -1;
-
-//   if ((*pte & PTE_COW) == 0) 
-//     return -1;
-//   else 
-//     return 0;
-// }
-
 int iscowpage(pagetable_t pagetable, uint64 va) {
-  if(va >= MAXVA)
+  if (va > MAXVA) {
+    printf("(va > MAXVA)\n"); 
     return -1;
-  pte_t* pte = walk(pagetable, va, 0);
-  if(pte == 0)
+  }
+  pte_t *pte = walk(pagetable, va, 0);
+  if (pte == 0)
     return -1;
-  if((*pte & PTE_V) == 0)
+  if ((*pte & PTE_V) == 0) 
     return -1;
-  return (*pte & PTE_COW ? 0 : -1);
+  // if ((*pte & PTE_W) != 0) 
+  //   return -1;
+
+  if ((*pte & PTE_COW) == 0) 
+    return -1;
+  else 
+    return 0;
 }
+
+
 
 
 int cowpagetrap(pagetable_t pagetable, uint64 va) {
@@ -270,17 +253,17 @@ int cowpagetrap(pagetable_t pagetable, uint64 va) {
   if (oldpa == 0)
     return -1;
 
-  if (getref(va) == 1) {
+  if (getref(oldpa) == 1) {
     *pte |= PTE_W; 
     *pte &= ~PTE_COW;
     return 0;
   } else {
     // 1. alloc a new page
-    void *mem = kalloc();
+    char *mem = kalloc();
     if (mem == 0) 
       return -1;
 
-    memmove((void*)mem, (void*)oldpa, PGSIZE);
+    memmove(mem, (char*)oldpa, PGSIZE);
   
     // get old flag 
     uint64 flag = PTE_FLAGS(*pte);
@@ -293,45 +276,3 @@ int cowpagetrap(pagetable_t pagetable, uint64 va) {
     return 0;
   }
 }
-
-// int cowpagetrap(pagetable_t pagetable, uint64 va) {
-//   if(va % PGSIZE != 0)
-//     return -1;
-
-//   uint64 pa = walkaddr(pagetable, va);  // 获取对应的物理地址
-//   if(pa == 0)
-//     return -1;
-
-//   pte_t* pte = walk(pagetable, va, 0);  // 获取对应的PTE
-
-//   if(getref((uint64)pa) == 1) {
-//     // 只剩一个进程对此物理地址存在引用
-//     // 则直接修改对应的PTE即可
-//     *pte |= PTE_W;
-//     *pte &= ~PTE_COW;
-//     return 0;
-//   } else {
-//     // 多个进程对物理内存存在引用
-//     // 需要分配新的页面，并拷贝旧页面的内容
-//     char* mem = kalloc();
-//     if(mem == 0)
-//       return -1;
-
-//     // 复制旧页面内容到新页
-//     memmove(mem, (char*)pa, PGSIZE);
-
-//     // 清除PTE_V，否则在mappagges中会判定为remap
-//     *pte &= ~PTE_V;
-
-//     // 为新页面添加映射
-//     if(mappages(pagetable, va, PGSIZE, (uint64)mem, (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW) != 0) {
-//       kfree(mem);
-//       *pte |= PTE_V;
-//       return -1;
-//     }
-
-//     // 将原来的物理内存引用计数减1
-//     kfree((char*)PGROUNDDOWN(pa));
-//     return 0;
-//   }
-// }
