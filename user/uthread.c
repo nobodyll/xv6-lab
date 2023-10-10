@@ -95,7 +95,7 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
-    printf("threadswitch from \n");
+    // printf("threadswitch from \n");
     thread_switch((uint64)&t->content,
                   (uint64)&current_thread->content);
 
@@ -116,7 +116,7 @@ thread_create(void (*func)())
 
   memset((void*)&(t->content), 0, sizeof(t->content));
 
-  t->content.sp = (uint64)&t->stack[0];
+  t->content.sp = (uint64)((uint64)((&t->stack[0]) + STACK_SIZE - 1) & ~0xFL);
   // printf("sp = %p\n", t->content.sp);
   t->content.ra = (uint64)func;
   // printf("ra = %p\n", t->content.ra);
