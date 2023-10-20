@@ -7,6 +7,17 @@
 #include "kernel/syscall.h"
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
+#include "kernel/sysinfo.h"
+
+
+void
+sinfo(struct sysinfo *info) {
+  if (sysinfo(info) < 0) {
+    printf("FAIL: sysinfo failed");
+    exit(1);
+  }
+}
+
 
 //
 // Tests xv6 system calls.  usertests without arguments runs them all
@@ -2973,6 +2984,11 @@ runtests(struct test *tests, char *justone) {
         return 1;
       }
     }
+
+    struct sysinfo info;
+    sinfo(&info);
+    printf("free mem: %d\n", info.freemem);
+
   }
   return 0;
 }

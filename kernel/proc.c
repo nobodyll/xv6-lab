@@ -84,10 +84,40 @@ myproc(void)
 {
   push_off();
   struct cpu *c = mycpu();
+  // timer intrrupt occur
+  // what will happen?
+  // c = cpu[2];
+  // call yield 
+  // resume
+  // now we are on the another cpu
+  // does the c still work?
+  // the c point to cpu[2], and the process running on that is changed
+  // 
+  // 也就是说如果在这里发生了time interrupt
+  // c指针指向的cpu里运行的进程就不是本进程了，函数就不正确了
   struct proc *p = c->proc;
   pop_off();
+  // 在打开中断之后，有可能会发生timer interrupt->yield
+  // 再恢复运行时，进程可能运行在另一个个cpu上,不过这个proc *p仍然是正确的
+  // see riscv-book 7.4mycpu and myproc
   return p;
 }
+// 在任何中断开启的地方，时刻都有可能发生timer interrupt
+// 这时候，进程可能会换到另一个cpu上运行
+// 问题： 如何获取当前cpu上运行的进程
+// 1. get hartid through r_tp()
+// 2. get struct cpu *c = cpu[r_tp()]
+// 3. get process c->proc
+
+// 关于1 如何保证hartid时刻都是正确的 
+// 在进程从内核返回用户空间的时候(usertrapret)， 将hartid保存到p->trapframe->kernel_hartid
+// 在进程从用户空间返回内核的时候(uservec), 将p->trapframe->kernel->hartid中保存的值重新set到tp寄存器
+// 关于2 3
+// 在获取当前cpu上运行的进程的时候，
+// 2 3 之间有一个空隙，如果没有禁用中断，有可能发生始终中断
+// 当再次返回的时候，2的结果已经失效了，当前进程运行的cpu已经改变
+// 而且2获得的结果，是进程以前运行的cpu，而现在，这个cpu上运行的进程也改变了，不再是当前进程
+
 
 int
 allocpid()
@@ -330,6 +360,11 @@ fork(void)
 
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
+// Because the wait_lock is the condition lock.
+// condition is the init process whether has ZOMBIE 
+// child process.
+// At here we make the condition become true, when 
+// we do this, we need hold the condition lock.
 void
 reparent(struct proc *p)
 {
@@ -434,6 +469,9 @@ wait(uint64 addr)
     
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
+    // When we wake up here, our process's killed flag maybe true.
+    // maybe we can check the killed flag here again.
+    // if killed flag was set, we abandon the current activity.
   }
 }
 
@@ -585,6 +623,7 @@ wakeup(void *chan)
 // Kill the process with the given pid.
 // The victim won't exit until it tries to return
 // to user space (see usertrap() in trap.c).
+// But if the process in RUNNING in the user space.
 int
 kill(int pid)
 {
@@ -594,6 +633,14 @@ kill(int pid)
     acquire(&p->lock);
     if(p->pid == pid){
       p->killed = 1;
+      // Here has a problem. 
+      // if the victim process is running 
+      // and we set the p->killed = 1.
+      // and then exit kill
+      // and soon victim porcess go to sleep
+      // that is a problem the victim process can exit
+      // only when he wake up, but he maybe never wake up, 
+      // if his's wait cond not true.
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
