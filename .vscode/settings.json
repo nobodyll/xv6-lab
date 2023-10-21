@@ -1,0 +1,10 @@
+{
+    "winopacity.opacity": 50,
+    "files.associations": {
+        "memlayout.h": "c",
+        "*.tcc": "c",
+        "string_view": "c",
+        "functional": "c",
+        "variant": "c"
+    }
+}

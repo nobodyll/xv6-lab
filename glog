@@ -1,0 +1,63 @@
+Stack frame at 0x3fffff9f70:
+ pc = 0x8000576c in fileread (kernel/file.c:119); saved pc = 0x80006660
+ called by frame at 0x3fffff9fa0, caller of frame at 0x3fffff9f30
+ source language c.
+ Arglist at 0x3fffff9f70, args: f=0x8001c018 <ftable+72>, addr=8224, n=4096
+ Locals at 0x3fffff9f70, Previous frame's sp is 0x3fffff9f70
+ Saved registers:
+  ra at 0x3fffff9f68, fp at 0x3fffff9f60, pc at 0x3fffff9f68Could not fetch register "ustatus"; remote failure reply 'E14'
+#0  statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\n", sz=4096) at kernel/spinlock.c:188
+#1  0x00000000800081a6 in statsread (user_dst=1, dst=8224, n=4096) at kernel/stats.c:41
+#2  0x000000008000576c in fileread (f=0x8001c018 <ftable+72>, addr=8224, n=4096) at kernel/file.c:119
+#3  0x0000000080006660 in sys_read () at kernel/sysfile.c:79
+#4  0x0000000080002f48 in syscall () at kernel/syscall.c:141
+#5  0x000000008000287e in usertrap () at kernel/trap.c:67
+#6  0x00000000000012f0 in statistics (buf=<error reading variable: Cannot access memory at address 0x5f18>, sz=<error reading variable: Cannot access memory at address 0x5f14>) at user/statistics.c:17
+Backtrace stopped: previous frame inner to this frame (corrupt stack?)
+Stack frame at 0x3fffff9f30:
+ pc = 0x800081a6 in statsread (kernel/stats.c:41); saved pc = 0x8000576c
+ called by frame at 0x3fffff9f70, caller of frame at 0x3fffff9f00
+ source language c.
+ Arglist at 0x3fffff9f30, args: user_dst=1, dst=8224, n=4096
+ Locals at 0x3fffff9f30, Previous frame's sp is 0x3fffff9f30
+ Saved registers:
+  ra at 0x3fffff9f28, fp at 0x3fffff9f20, pc at 0x3fffff9f28Could not fetch register "ustatus"; remote failure reply 'E14'
+#0  statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\n", sz=4096) at kernel/spinlock.c:188
+Temporary breakpoint 3 at 0x80009c6e: file kernel/spinlock.c, line 194.
+Continuing.
+
+Thread 2 hit Temporary breakpoint 3, statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\n", sz=4096) at kernel/spinlock.c:194
+snprint_lock (buf=0x8001d140 <stats+104> "", sz=4024, lk=0x80011a60 <bcache>) at kernel/spinlock.c:173
+statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\nlock: bcache: #test-and-set 0 #acquire() 1232\n", sz=4096) at kernel/spinlock.c:188
+Temporary breakpoint 4 at 0x80009c50: file kernel/spinlock.c, line 193.
+Continuing.
+
+Thread 2 received signal SIGINT, Interrupt.
+0x0000003ffffff000 in ?? ()
+=> 0x0000003ffffff000:	14051073        	csrw	sscratch,a0
+#0  0x0000003ffffff000 in ?? ()
+Continuing.
+
+Thread 2 hit Breakpoint 1, statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\nlock: bcache: #test-and-set 0 #acquire() 1232\n--- top 5 contended locks:\nlock: virtio_disk: #test-and-set 136940 #acquire() 159\n"..., sz=4096) at kernel/spinlock.c:184
+$5 = 4096
+#0  statslock (buf=0x8001d0f8 <stats+32> "--- lock kmem/bcache stats\nlock: kmem: #test-and-set 0 #acquire() 32988\nlock: bcache: #test-and-set 0 #acquire() 1232\n--- top 5 contended locks:\nlock: virtio_disk: #test-and-set 136940 #acquire() 159\n"..., sz=4096) at kernel/spinlock.c:184
+#1  0x00000000800081a6 in statsread (user_dst=1, dst=8224, n=4096) at kernel/stats.c:41
+#2  0x000000008000576c in fileread (f=0x8001c018 <ftable+72>, addr=8224, n=4096) at kernel/file.c:119
+#3  0x0000000080006660 in sys_read () at kernel/sysfile.c:79
+#4  0x0000000080002f48 in syscall () at kernel/syscall.c:141
+#5  0x000000008000287e in usertrap () at kernel/trap.c:67
+#6  0x00000000000012f0 in statistics (buf=<error reading variable: Cannot access memory at address 0x5f18>, sz=<error reading variable: Cannot access memory at address 0x5f14>) at user/statistics.c:17
+Backtrace stopped: previous frame inner to this frame (corrupt stack?)
+#6  0x00000000000012f0 in statistics (buf=<error reading variable: Cannot access memory at address 0x5f18>, sz=<error reading variable: Cannot access memory at address 0x5f14>) at user/statistics.c:17
+
+
+Fatal signal: Aborted
+----- Backtrace -----
+Backtrace unavailable
+---------------------
+A fatal error internal to GDB has been detected, further
+debugging is not possible.  GDB will now terminate.
+
+This is a bug, please report it.  For instructions, see:
+<https://www.gnu.org/software/gdb/bugs/>.
+

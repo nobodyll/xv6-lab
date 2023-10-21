@@ -19,6 +19,6 @@ statistics(void *buf, int sz)
     }
     i += n;
   }
-  close(fd);
+    close(fd);
   return i;
 }
