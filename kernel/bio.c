@@ -68,6 +68,9 @@ bget(uint dev, uint blockno)
   while (b != &hashtbl_buf.bucket[index]) {
     if (b->dev == dev && b->blockno == blockno) {
       b->refcnt++;
+      acquire(&tickslock);
+      b->timeticks = ticks;
+      release(&tickslock);
       release(&hashtbl_buf.lock[index]);
       acquiresleep(&b->lock);
       return b;
@@ -78,30 +81,45 @@ bget(uint dev, uint blockno)
 
   // Not cached.  alloc a new buf and add to bucket.
   acquire(&bcache.lock);
+  // find the least recently used unused buf;
+
+  int lur = -1;
   for (int i = 0; i < NBUF; ++i) {
     if(bcache.buf[i].refcnt == 0) {
-      bcache.buf[i].dev = dev;
-      bcache.buf[i].blockno = blockno;
-      bcache.buf[i].valid = 0;
-      bcache.buf[i].refcnt = 1;
-      release(&bcache.lock);
-
-      // add buf to bucket.
-      // acquire(&hashtbl_buf.lock[index]);
-      bcache.buf[i].prev = &hashtbl_buf.bucket[index];
-      bcache.buf[i].next = hashtbl_buf.bucket[index].next;
-      hashtbl_buf.bucket[index].next->prev = &bcache.buf[i];
-      hashtbl_buf.bucket[index].next = &bcache.buf[i];
-      release(&hashtbl_buf.lock[index]);
-
-      acquiresleep(&bcache.buf[i].lock);
-      return &bcache.buf[i];
+      if (lur == -1){
+        lur = i;
+      } else {
+        if (bcache.buf[i].timeticks < bcache.buf[lur].timeticks) {
+          lur = i;
+        }
+      }
     }
   }
 
-  release(&hashtbl_buf.lock[index]);
+  if (lur == -1) {
+    // buf cache is running out.
+    release(&bcache.lock);
+    release(&hashtbl_buf.lock[index]);
+    panic("buf cache is running out\n");
+  }
+
+  bcache.buf[lur].dev = dev;
+  bcache.buf[lur].blockno = blockno;
+  bcache.buf[lur].valid = 0;
+  bcache.buf[lur].refcnt = 1;
   release(&bcache.lock);
-  panic("bget: no buffers");
+
+  // add buf to bucket.
+  // acquire(&hashtbl_buf.lock[index]);
+  bcache.buf[lur].prev = &hashtbl_buf.bucket[index];
+  bcache.buf[lur].next = hashtbl_buf.bucket[index].next;
+  hashtbl_buf.bucket[index].next->prev = &bcache.buf[lur];
+  hashtbl_buf.bucket[index].next = &bcache.buf[lur];
+  release(&hashtbl_buf.lock[index]);
+
+  acquiresleep(&bcache.buf[lur].lock);
+  return &bcache.buf[lur];
+
 }
 
 // Return a locked buf with the contents of the indicated block.
@@ -152,16 +170,18 @@ brelse(struct buf *b)
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  uint index = hash(b->blockno);
+  acquire(&hashtbl_buf.lock[index]);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&hashtbl_buf.lock[index]);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  uint index = hash(b->blockno);
+  acquire(&hashtbl_buf.lock[index]);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&hashtbl_buf.lock[index]);
 }
 
 
