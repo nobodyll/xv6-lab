@@ -68,9 +68,9 @@ new_freerange(void *pa_start, void *pa_end)
   for(int i = 0; p + PGSIZE <= (char*)pa_end;++i, p += PGSIZE) {
     new_kfree_for_kfrange(p, i % NCPU);
   }
-  for (int i = 0; i < NCPU; ++i) {
-    printf("hartid: %d, count = %d\n", i, new_kmem.count[i]);
-  }
+  // for (int i = 0; i < NCPU; ++i) {
+  //   printf("hartid: %d, count = %d\n", i, new_kmem.count[i]);
+  // }
   // panic("1");
 }
 
