@@ -15,6 +15,8 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
+#include "vma.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -501,5 +503,116 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+// void *mmap(void *addr, size_t length, int prot, int flags,
+//            int fd, off_t offset);
+uint64 
+sys_mmap(void)
+{
+  int length, prot, flags, fd, offset;
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+
+  struct proc *p = myproc();
+  // mmap don't allow map read only file with write/read prot;
+  // check file(fd)'s prot
+  struct file *pfile = p->ofile[fd];
+  if ((pfile->readable && !pfile->writable) && (prot & PROT_WRITE) &&
+      (flags & MAP_SHARED)) {
+    return -1;
+  }
+
+    // allocate a vma
+  struct VMA *vma = vma_alloc();
+  vma->fd = fd;
+  vma->length = length;
+  vma->flags = flags;
+  vma->prot = prot;
+  vma->file = myproc()->ofile[fd];
+  // mmap should increase the file's reference 
+  // count so that the structure doesn't 
+  // disappear when the file is closed
+  filedup(vma->file);
+
+  int i = 0;
+  for (; i < NMMAPFILE; ++i) {
+    if (myproc()->mmap_vma[i] == 0) {
+      vma->addr = (void*)(MMAP_ADDR(i));
+      vma->index = i;
+      myproc()->mmap_vma[i] = vma;
+      break;
+    }
+  }
+  if (i == NMMAPFILE) 
+    panic("proc's mmap_vma is running out!\n");
+
+
+  return (uint64)myproc()->mmap_vma[i]->addr;
+}
+
+uint64
+sys_munmap(void)
+{
+  //  int munmap(void addr[.length], size_t length);
+  uint64 va;
+  int length;
+  argaddr(0, &va);
+  argint(1, &length);
+
+  // the area of munmap maybe haven't been allocated.
+  // find the va in proc's vma_region
+  struct proc *p = myproc();
+  int i = 0;
+  for (; i < NMMAPFILE; ++i) {
+    if (p->mmap_vma[i] != 0) {
+      if (va >= (uint64)p->mmap_vma[i]->addr &&
+          va <=
+              (uint64)((uint64)p->mmap_vma[i]->addr + p->mmap_vma[i]->length)) {
+        // found it
+        int len = 0;
+        while (len < length) {
+          va = PGROUNDDOWN(va);
+          uint64 pa = walkaddr(p->pagetable, va);
+          if (pa != 0) {
+            // if the vma area with MAP_SHARED flag and the page was modefied
+            // need write it to disk.
+            if (p->mmap_vma[i]->flags & MAP_SHARED) {
+              begin_op();
+              ilock(p->mmap_vma[i]->file->ip);
+              int off = (uint64)va - (uint64)p->mmap_vma[i]->addr;
+              writei(p->mmap_vma[i]->file->ip, 0, pa, off, 4096);
+              iunlock(p->mmap_vma[i]->file->ip);
+              end_op();
+            }
+
+            uvmunmap(p->pagetable, va, 1, 1);
+          }
+          len += 4096;
+          va += 4096;
+        }
+
+
+        if (len >= p->mmap_vma[i]->length) {
+          // the whole VMA was unmmaped. need free it.
+          fileclose(p->mmap_vma[i]->file);
+          vma_free(p->mmap_vma[i]);
+          p->mmap_vma[i] = 0;
+        } else {
+          p->mmap_vma[i]->addr += length;
+          p->mmap_vma[i]->length -= length;
+        }
+        break;
+      }
+    }
+  }
+
+  if (i == NMMAPFILE)
+    return -1;
+
   return 0;
 }

@@ -1,10 +1,11 @@
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
-#include "riscv.h"
 #include "spinlock.h"
+#include "riscv.h"
 #include "proc.h"
 #include "defs.h"
+#include "vma.h"
 
 struct cpu cpus[NCPU];
 
@@ -26,6 +27,77 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+struct {
+  struct spinlock lock;
+  struct VMA vma[VMA_TBL_SIZE];
+} vma_table;
+
+struct VMA* 
+vma_alloc()
+{
+  acquire(&vma_table.lock);
+  for(int i = 0; i < VMA_TBL_SIZE; ++i) {
+    if (vma_table.vma[i].used == 0) {
+      // printf("alloc %d allocated\n", i);
+      vma_table.vma[i].used = 1;
+      release(&vma_table.lock);
+      return &vma_table.vma[i];
+    }
+  }
+  release(&vma_table.lock);
+
+  panic("vma_table is running out!\n");
+}
+
+struct VMA* vma_dup(struct VMA * vma) {
+  struct VMA *retVMA = 0;
+  acquire(&vma_table.lock);
+
+  int found = 0;
+  
+  for(int i = 0; i < VMA_TBL_SIZE; ++i) {
+    if (vma_table.vma[i].used == 0) {
+      vma_table.vma[i].used = 1;
+      retVMA = &vma_table.vma[i];
+      // printf("dup %d allocated\n", i);
+      found = 1;
+      break;
+    }
+  }
+
+  release(&vma_table.lock);
+
+  if (!found) {
+    panic("vma_dup()\n");
+  }
+
+  // copy 
+  retVMA->addr = vma->addr;
+  retVMA->fd = vma->fd;
+  retVMA->flags = vma->flags;
+  retVMA->file = vma->file;
+  retVMA->length = vma->length;
+  retVMA->prot = vma->prot;
+  retVMA->index = vma->index;
+  retVMA->addr = vma->addr;
+
+  filedup(vma->file);
+
+  return retVMA;
+}
+
+void
+vma_free(struct VMA* vma)
+{
+  acquire(&vma_table.lock);
+  for(int i = 0; i < VMA_TBL_SIZE; ++i) {
+    if (&vma_table.vma[i] == vma) {
+      vma->used = 0;
+      break;
+    }
+  }
+  release(&vma_table.lock);
+}
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -296,6 +368,12 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // copy user vma form parent to child.
+  for (int i = 0; i < NMMAPFILE; i++) {
+    if (p->mmap_vma[i] != 0) 
+      np->mmap_vma[i] = vma_dup(p->mmap_vma[i]);
+  }
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -358,6 +436,23 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+  }
+
+  // free proc's VMA
+  for (int i = 0; i < NMMAPFILE; ++i) {
+    if (p->mmap_vma[i] != 0) {
+      uint64 va = (uint64)p->mmap_vma[i]->addr;
+      for (int len = p->mmap_vma[i]->length; len > 0; len -= PGSIZE) {
+        uint64 pa = walkaddr(p->pagetable, va);
+        if (pa != 0) {
+          uvmunmap(p->pagetable, va, 1, 1);
+        }
+        va += PGSIZE;
+      }
+      fileclose(p->mmap_vma[i]->file);
+      vma_free(p->mmap_vma[i]);
+      p->mmap_vma[i] = 0;
+    }    
   }
 
   begin_op();
@@ -681,3 +776,13 @@ procdump(void)
     printf("\n");
   }
 }
+
+void
+vmainit() 
+{
+  initlock(&vma_table.lock, "vmalock");
+  for (int i = 0; i < VMA_TBL_SIZE; ++i) {
+    vma_table.vma[i].used = 0;
+  }
+}
+

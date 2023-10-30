@@ -4,7 +4,12 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sleeplock.h"
 #include "defs.h"
+#include "fs.h"
+#include "file.h"
+#include "vma.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,6 +72,12 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if ((r_scause() == 13) || (r_scause() == 15)) {
+    uint64 va = r_stval(); 
+    
+    if (va >= MAXVA || mmap_trap(myproc()->pagetable, va) == -1) 
+      p->killed = 1;
+
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
@@ -219,3 +230,53 @@ devintr()
   }
 }
 
+int mmap_trap(pagetable_t pagetable, uint64 va) {
+  if (va > MAXVA) 
+    return -1;
+  pte_t *pte = walk(pagetable, va, 0);
+  if (pte != 0 && ((*pte & PTE_V) != 0))
+    return -1;
+
+  va = PGROUNDDOWN(va);
+  // checkout if va belog to valid vma.
+  struct proc *p = myproc();
+  struct VMA *vma = 0;
+  int valid = 0;
+
+  for (int i = 0; i < NMMAPFILE; ++i) {
+    if (p->mmap_vma[i] != 0) {
+      if (va >= (uint64)p->mmap_vma[i]->addr &&
+          va <= (uint64)((uint64)p->mmap_vma[i]->addr + p->mmap_vma[i]->length)) {
+        vma = p->mmap_vma[i];
+        valid = 1;
+        break;
+      }
+    }
+  }
+
+  if (valid == 0) // va not found in VMA region.
+    return -1;
+
+  void *mem = kalloc();
+  if (mem == 0) 
+    return -1;
+  else 
+    memset(mem, 0, 4096);
+
+  int off = (va - (uint64)vma->addr);
+
+  // read file content to mem
+  ilock(vma->file->ip);
+  readi(vma->file->ip, 0, (uint64)mem, off, 4096);
+  iunlock(vma->file->ip);
+
+  int prot = vma->prot;
+  int perm = 0;
+  if (prot & PROT_EXEC) { perm |= PTE_X; }
+  if (prot & PROT_READ) { perm |= PTE_R; }
+  if (prot & PROT_WRITE) { perm |= PTE_W; }
+  perm |= PTE_U;
+  mappages(pagetable, va, PGSIZE, (uint64)mem, perm);
+
+  return 0;
+}

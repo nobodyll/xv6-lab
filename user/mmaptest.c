@@ -173,7 +173,7 @@ mmap_test(void)
     err("munmap (3)");
   
   printf("test mmap read/write: OK\n");
-  
+ 
   printf("test mmap dirty\n");
   
   // check that the writes to the mapped memory were
